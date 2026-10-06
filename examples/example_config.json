@@ -1,0 +1,75 @@
+{
+  "image": "comic.png",
+  "output": "output/comic_video.mp4",
+  "panel_duration_seconds": 5.0,
+  "transition_duration_seconds": 2.0,
+  "intro_duration_seconds": 2.0,
+  "outro_duration_seconds": 2.0,
+  "preset": "educational",
+  "include_intro": true,
+  "include_outro": true,
+  "show_full_comic_between_panels": true,
+  "sequence": [1, 2, 3, 4, 5, 6],
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "fps": 30,
+  "audio": false,
+  "manual_panels_example": [
+    {
+      "id": 1,
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 720,
+      "focus_x": 640,
+      "focus_y": 360
+    },
+    {
+      "id": 2,
+      "x": 1280,
+      "y": 0,
+      "width": 1280,
+      "height": 720,
+      "focus_x": 1920,
+      "focus_y": 360
+    },
+    {
+      "id": 3,
+      "x": 2560,
+      "y": 0,
+      "width": 1280,
+      "height": 720,
+      "focus_x": 3200,
+      "focus_y": 360
+    },
+    {
+      "id": 4,
+      "x": 0,
+      "y": 720,
+      "width": 1280,
+      "height": 720,
+      "focus_x": 640,
+      "focus_y": 1080
+    },
+    {
+      "id": 5,
+      "x": 1280,
+      "y": 720,
+      "width": 1280,
+      "height": 720,
+      "focus_x": 1920,
+      "focus_y": 1080
+    },
+    {
+      "id": 6,
+      "x": 2560,
+      "y": 720,
+      "width": 1280,
+      "height": 720,
+      "focus_x": 3200,
+      "focus_y": 1080
+    }
+  ]
+}

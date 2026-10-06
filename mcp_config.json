@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "comic-video": {
+      "command": "python",
+      "args": [
+        "server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comic-video-mcp"
+version = "0.1.0"
+description = "MCP server for converting 6-tile comics into cinematic educational videos using virtual 2D camera movement"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.3.0",
+    "pydantic>=2.0.0",
+    "numpy>=1.24.0",
+    "opencv-python-headless>=4.8.0",
+    "pillow>=10.0.0",
+    "static-ffmpeg>=2.5",
+    "pytest>=7.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
