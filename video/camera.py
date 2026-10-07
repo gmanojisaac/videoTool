@@ -94,12 +94,49 @@ def compute_panel_viewports(
     zoom_factor: float = 1.05,
     safe_margin: float = 0.08,
     target_aspect: float = 16.0 / 9.0,
+    framing: str = "crop",
+    protected_content_bounds: Optional[Dict[str, float]] = None,
 ) -> Tuple[Viewport, Viewport]:
     """Computes borderless (start_viewport, end_viewport) for a story area on the continuous canvas.
     
     Frames the illustration strictly inside the story area so that panel border lines,
     frames, and gutters are never visibly shown on video.
     """
+    if framing == "contain":
+        # Fit the complete tile; unequal aspect ratios require padding.
+        width = max(float(panel.width), float(panel.height) * target_aspect)
+        height = width / target_aspect
+        viewport = Viewport(x=panel.x + (panel.width - width) / 2,
+            y=panel.y + (panel.height - height) / 2, width=width, height=height)
+        protected = protected_content_bounds if protected_content_bounds is not None else panel.protected_content_bounds
+        if protected is None:
+            # No content detection guesses: every panel pixel is protected.
+            return viewport, viewport
+        if set(protected) != {"x", "y", "width", "height"}:
+            raise ValueError("Protected bounds require x, y, width, height")
+        bounds = {key: float(value) for key, value in protected.items()}
+        if not all(math.isfinite(value) for value in bounds.values()):
+            raise ValueError("Protected bounds must be finite")
+        px, py, pw, ph = (bounds[key] for key in ("x", "y", "width", "height"))
+        if pw <= 0 or ph <= 0 or px < panel.x or py < panel.y or px+pw > panel.x+panel.width or py+ph > panel.y+panel.height:
+            raise ValueError("Protected bounds must lie inside the panel with positive dimensions")
+        if not math.isfinite(zoom_factor) or zoom_factor < 1:
+            raise ValueError("Zoom factor must be finite and at least 1")
+        end_width = max(width / zoom_factor, pw, ph * target_aspect)
+        if movement == "hold" or end_width >= width - 1e-9:
+            return viewport, viewport
+        end_height = end_width / target_aspect
+        # Keep the target inside the complete view and enclose all protected content.
+        min_x = max(viewport.x, px+pw-end_width)
+        max_x = min(viewport.x+width-end_width, px)
+        min_y = max(viewport.y, py+ph-end_height)
+        max_y = min(viewport.y+height-end_height, py)
+        end = Viewport(x=max(min_x, min(max_x, panel.focus_x-end_width/2)),
+            y=max(min_y, min(max_y, panel.focus_y-end_height/2)),
+            width=end_width, height=end_height)
+        return viewport, end
+    if framing != "crop":
+        raise ValueError("framing must be contain or crop")
     img_w = float(image_width)
     img_h = float(image_height)
 

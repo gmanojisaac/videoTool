@@ -181,9 +181,10 @@ def test_continuous_canvas_transitions(desktop_4_3_comic, tmp_path):
     analysis = analyze_comic(str(desktop_4_3_comic), output_dir=str(tmp_path))
     plan = create_camera_plan(
         analysis=analysis,
+        backtrack_to_start=False,
         panel_duration_seconds=3.0,
         transition_duration_seconds=1.5,
-        output_dir=str(tmp_path),
+        framing="crop", output_dir=str(tmp_path),
     )
 
     assert plan["format"] == "desktop"
@@ -214,7 +215,7 @@ def test_desktop_4_3_render(desktop_4_3_comic, tmp_path):
         intro_duration_seconds=0.4,
         outro_duration_seconds=0.4,
         fps=30,
-        output_dir=str(tmp_path),
+        framing="crop", output_dir=str(tmp_path),
     )
 
     assert result["status"] == "success"
@@ -239,7 +240,7 @@ def test_mobile_9_16_render(mobile_9_16_comic, tmp_path):
         intro_duration_seconds=0.4,
         outro_duration_seconds=0.4,
         fps=30,
-        output_dir=str(tmp_path),
+        framing="crop", output_dir=str(tmp_path),
     )
 
     assert result["status"] == "success"
@@ -251,3 +252,38 @@ def test_mobile_9_16_render(mobile_9_16_comic, tmp_path):
     assert meta["width"] == 1080
     assert meta["height"] == 1920
     assert meta["has_audio"] is False
+
+
+@pytest.mark.parametrize("fixture_name,layout", [("desktop_4_3_comic", "3x2"), ("mobile_9_16_comic", "2x3")])
+@pytest.mark.parametrize("mode,resolution", [("desktop", {"width":1920,"height":1080}), ("mobile", {"width":1080,"height":1920})])
+def test_independent_modes_and_exact_backtrack(request, fixture_name, layout, mode, resolution, tmp_path):
+    image = request.getfixturevalue(fixture_name)
+    analysis = analyze_comic(str(image), format=mode, output_dir=str(tmp_path))
+    assert analysis["layout"] == layout
+    plan = create_camera_plan(analysis, format=mode, framing="crop", output_dir=str(tmp_path))
+    assert plan["resolution"] == resolution
+    assert plan["layout"] == layout
+    shots = plan["shots"]
+    obj = CameraPlan(**plan)
+    for i, shot in enumerate(shots):
+        if shot["type"] != "panel":
+            continue
+        approach, push = shots[i-1], shot
+        reverse_push, reverse_approach = shots[i+1:i+3]
+        for forward, reverse in [(push, reverse_push), (approach, reverse_approach)]:
+            assert reverse["movement"] == "backtrack"
+            assert forward["start_viewport"] == reverse["end_viewport"]
+            assert forward["end_viewport"] == reverse["start_viewport"]
+            for progress in [0.1, 0.3, 0.6, 0.9]:
+                a = get_viewport_at_time(obj, forward["start"] + progress * forward["duration"])
+                b = get_viewport_at_time(obj, reverse["start"] + (1-progress) * reverse["duration"])
+                assert list(a.model_dump().values()) == pytest.approx(list(b.model_dump().values()))
+    for a,b in zip(shots, shots[1:]):
+        assert a["end_viewport"] == b["start_viewport"]
+        assert a["end"] == b["start"]
+    result = create_comic_video(str(image), format=mode, width=320 if mode=="desktop" else 180,
+        height=180 if mode=="desktop" else 320, fps=10, panel_duration_seconds=0.2,
+        transition_duration_seconds=0.2, intro_duration_seconds=0.2, outro_duration_seconds=0.2,
+        output=str(tmp_path / "cross_mode.mp4"), framing="crop", output_dir=str(tmp_path))
+    assert result["layout"] == layout
+    assert result["format"] == mode

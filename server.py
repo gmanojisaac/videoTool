@@ -78,6 +78,7 @@ def create_camera_plan(
     include_intro: bool = True,
     include_outro: bool = True,
     show_full_comic_between_panels: bool = False,
+    backtrack_to_start: bool = True,
     sequence: Optional[List[int]] = None,
     intro_duration_seconds: float = DEFAULT_INTRO_DURATION,
     outro_duration_seconds: float = DEFAULT_OUTRO_DURATION,
@@ -87,6 +88,10 @@ def create_camera_plan(
     output_dir: Optional[str] = None,
     format: Optional[str] = None,
     layout: Optional[str] = None,
+    framing: str = "contain",
+    panel_hold_seconds: float = 1.0,
+    push_in_zoom: Optional[float] = None,
+    protected_content_bounds: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> Dict[str, Any]:
     """Generates a continuous canvas camera storyboard treating the comic as one single scene.
     
@@ -104,6 +109,7 @@ def create_camera_plan(
         include_intro: Start with full comic canvas overview.
         include_outro: Smoothly pull back to full comic canvas overview at the end.
         show_full_comic_between_panels: False for seamless continuous canvas; True to zoom out to grid.
+        backtrack_to_start: Reverse each panel approach before visiting the next panel.
         sequence: Custom reading order sequence of panel IDs (e.g. [1, 2, 3, 4, 5, 6]).
         intro_duration_seconds: Duration of full comic intro shot (default: 2.0).
         outro_duration_seconds: Duration of full comic outro shot (default: 2.0).
@@ -111,7 +117,7 @@ def create_camera_plan(
         height: Video height (default: auto-detected 1080 for desktop, 1920 for mobile).
         fps: Frames per second (default: 30).
         output_dir: Output directory where camera_plan.json will be written.
-        format: Optional format override ('desktop' or 'mobile').
+        format: Output mode ('desktop' or 'mobile'); source layout is detected independently.
         layout: Optional layout override ('3x2' or '2x3').
     """
     return create_camera_plan_impl(
@@ -122,6 +128,11 @@ def create_camera_plan(
         include_intro=include_intro,
         include_outro=include_outro,
         show_full_comic_between_panels=show_full_comic_between_panels,
+        backtrack_to_start=backtrack_to_start,
+        framing=framing,
+        panel_hold_seconds=panel_hold_seconds,
+        push_in_zoom=push_in_zoom,
+        protected_content_bounds=protected_content_bounds,
         sequence=sequence,
         intro_duration_seconds=intro_duration_seconds,
         outro_duration_seconds=outro_duration_seconds,
@@ -205,6 +216,7 @@ def create_comic_video(
     include_intro: bool = True,
     include_outro: bool = True,
     show_full_comic_between_panels: bool = False,
+    backtrack_to_start: bool = True,
     manual_panels: Optional[List[Dict[str, Any]]] = None,
     sequence: Optional[List[int]] = None,
     width: Optional[int] = None,
@@ -214,6 +226,10 @@ def create_comic_video(
     output_dir: Optional[str] = None,
     format: Optional[str] = None,
     layout: Optional[str] = None,
+    framing: str = "contain",
+    panel_hold_seconds: float = 1.0,
+    push_in_zoom: Optional[float] = None,
+    protected_content_bounds: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> Dict[str, Any]:
     """End-to-end continuous canvas pipeline: treats the comic strip as ONE continuous canvas.
     
@@ -232,13 +248,14 @@ def create_comic_video(
         include_outro: Pull back to full comic overview at the end.
         show_full_comic_between_panels: False for seamless continuous canvas; True to zoom out to grid.
         manual_panels: Optional manual panel coordinate overrides.
+        backtrack_to_start: Reverse each panel approach before visiting the next panel.
         sequence: Custom reading order sequence of panel IDs.
         width: Video width (default: auto-detected 1920 for desktop, 1080 for mobile).
         height: Video height (default: auto-detected 1080 for desktop, 1920 for mobile).
         fps: Frames per second (default: 30).
         audio: False or path to audio voiceover file.
         output_dir: Output directory for all generated artifacts.
-        format: Optional format override ('desktop' or 'mobile').
+        format: Output mode ('desktop' or 'mobile'); source layout is detected independently.
         layout: Optional layout override ('3x2' or '2x3').
     """
     return create_comic_video_impl(
@@ -252,6 +269,11 @@ def create_comic_video(
         include_intro=include_intro,
         include_outro=include_outro,
         show_full_comic_between_panels=show_full_comic_between_panels,
+        backtrack_to_start=backtrack_to_start,
+        framing=framing,
+        panel_hold_seconds=panel_hold_seconds,
+        push_in_zoom=push_in_zoom,
+        protected_content_bounds=protected_content_bounds,
         manual_panels=manual_panels,
         sequence=sequence,
         width=width,

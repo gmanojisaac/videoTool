@@ -30,7 +30,7 @@ if "%PYTHON_EXE%"=="" (
 echo Using Python: %PYTHON_EXE%
 echo Running comic video pipeline on comic.png...
 
-"%PYTHON_EXE%" -c "import sys; sys.path.insert(0, '.'); from mcp_tools import create_comic_video; res = create_comic_video(image='comic.png', output='output/comic_video.mp4'); print('\n[SUCCESS] Rendered to:', res['video_path'])"
+"%PYTHON_EXE%" render_modes.py comic.png --mode both
 
 if %errorlevel% neq 0 (
     echo [ERROR] Video generation failed.
@@ -39,7 +39,8 @@ if %errorlevel% neq 0 (
 )
 
 echo Opening generated video and output folder...
-start "" "output\comic_video.mp4"
+start "" "output\desktop\comic_video.mp4"
+start "" "output\mobile\comic_video.mp4"
 start "" "output"
 
 echo Done!

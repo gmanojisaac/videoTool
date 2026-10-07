@@ -271,6 +271,7 @@ def analyze_comic_image(
             focus_x=fx,
             focus_y=fy,
             focus_type=ftype,
+            protected_content_bounds=p.get("protected_content_bounds"),
             confidence=p.get("confidence", confidence),
         )
         final_panels.append(panel_obj)

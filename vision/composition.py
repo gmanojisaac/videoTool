@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from models.schemas import Viewport, Panel
 
 
@@ -83,8 +83,13 @@ def detect_comic_format_and_layout(
     if layout_override:
         lay = layout_override.strip()
     else:
-        lay = "2x3" if fmt == "mobile" else "3x2"
+        lay = "2x3" if aspect < 0.85 else "3x2"
         
+    if fmt not in ("desktop", "mobile"):
+        raise ValueError("format must be desktop or mobile")
+    if lay not in ("3x2", "2x3"):
+        raise ValueError("layout must be 3x2 or 2x3")
+
     if fmt == "mobile":
         def_w, def_h = 1080, 1920
     else:

@@ -45,6 +45,24 @@ This server enables LLM clients (such as Codex, Claude, and Antigravity) to take
 
 ---
 
+## Output modes and backtracking
+
+Render either a 4:3 or 9:16 comic in both modes:
+
+```powershell
+.\.venv\Scripts\python.exe render_modes.py comic.png --mode both
+```
+
+Use `--mode desktop` for 1920x1080 or `--mode mobile` for 1080x1920.
+Outputs are saved separately to `output/desktop` and `output/mobile`.
+The `format` parameter selects output mode independently of source layout.
+Source layout defaults to 3x2 for landscape and 2x3 for portrait; use `layout` to override it.
+
+By default, `backtrack_to_start=True` reverses the panel push-in and then retraces
+the entry path before approaching the next panel. Reverse movements have the same
+durations as their forward movements, so videos are longer. Set it to False for
+the previous direct travel.
+
 ## 4. Python Setup
 
 Clone or place the project on your machine (e.g. `D:\mcp\comic-video-mcp`):
@@ -148,7 +166,7 @@ The server automatically detects whether your comic strip is **Desktop** or **Mo
 
 * **Single Continuous Canvas**: The entire comic strip is treated as one large 2D scene, not a 6-frame slideshow.
 * **No Visible Borders or Frames**: Story area viewports are safely inset inside panel boundaries so panel frame strokes, black border lines, and white gutters are never visibly displayed on video.
-* **Continuous Travel**: The camera smoothly pushes in from the full comic overview into Panel 1, glides continuously across the canvas between story areas (Panel 1 → 2 → 3 → 4 → 5 → 6), and smoothly pulls back to the full scene overview at the end.
+* **Legacy continuous travel (`backtrack_to_start=False`)**: The camera smoothly pushes in from the full comic overview into Panel 1, glides continuously across the canvas between story areas (Panel 1 → 2 → 3 → 4 → 5 → 6), and smoothly pulls back to the full scene overview at the end.
 * **No Hard Cuts or Flashes**: Zero hard cuts, zero slideshow transitions, and zero flashing to black or white.
 
 ---
@@ -291,7 +309,7 @@ Run all unit and integration tests:
 pytest tests -v
 ```
 
-All 13 tests covering panel detection, reading order, manual overrides, camera plans, timing math, real FFmpeg rendering, and source safety pass with 100% green status.
+The suite covers panel detection, camera plans, protected framing, backtracking, frame exports, web requests, real FFmpeg rendering, and source safety.
 
 ---
 
@@ -300,3 +318,23 @@ All 13 tests covering panel detection, reading order, manual overrides, camera p
 * **FFmpeg not found**: Install `static-ffmpeg` (`pip install static-ffmpeg`) or set `$env:FFMPEG_PATH = "C:\path\to\ffmpeg.exe"`.
 * **Low panel detection confidence**: Inspect `output/panel_detection_preview.png`. If the comic layout has unusual borders, supply `manual_panels` coordinates.
 * **Audio Voiceover**: Audio is OFF by default (silent MP4). To mux external audio, pass `"audio": "path/to/voiceover.wav"` to `render_video`.
+
+## Local web page
+
+Run `.\.venv\Scripts\python.exe web_server.py` (or double-click `start_web.bat`), then open http://127.0.0.1:8000. Upload a PNG/JPG comic, select desktop, mobile, or both, and click Create video. The page shows rendering progress, video previews, and MP4 downloads. Rendered files and uploaded images are kept in `output/web/<job-id>/`. The web server listens on this computer only; jobs run one at a time. Restarting the server clears the in-memory job list; generated files remain on disk.
+
+## Whole-tile framing for editing
+
+New renders default to `framing="contain"`: every focused tile fits completely inside the desktop or mobile frame, with neutral padding where aspect ratios differ. By default the entire panel is protected and stays still; optional protected rectangles allow a subtle safe push-in after the initial hold. The web page defaults to a one-second tile hold. Camera approaches and complete backtracking are preserved. Use `framing="crop"` explicitly to restore the earlier borderless crop/push-in behavior. Existing camera-plan JSON files retain their original framing. This renderer moves a camera over a still image; character animation must be added separately.
+
+All new contain-mode overview and panel shots preserve proportions. Aspect-ratio differences use neutral padding instead of stretching.
+
+## Protected push-in framing
+
+All new contain-mode shots preserve aspect ratio, including the overview (superseding the earlier stretched desktop overview). `panel_duration_seconds` is the total focused shot duration; `panel_hold_seconds` defaults to 1 second before movement. `push_in_zoom` optionally overrides the preset, between 1 and 1.2. `protected_content_bounds` maps panel IDs to rectangles in absolute source-image coordinates, for example `{"1":{"x":20,"y":20,"width":400,"height":500}}`. Every rectangle must lie inside its panel and enclose every face, hand, object and text region you want preserved. Missing bounds protect the entire panel and disable push-in. The safe zoom is reduced as needed; a full-panel hold is used when zoom is impossible. Focused shots and zoom reversal mask neighbours; entry and entry-path reversal reveal the comic canvas. Zoom reversal lasts only the forward movement portion of the shot, then the entry path reverses. The web page exposes hold, zoom and protected-bounds controls.
+
+## Starting frames for animation / Clipchamp
+
+Each render now exports a lossless PNG of every complete-panel focus view at the output resolution, before its push-in. The same viewport, neutral padding and neighbour masking are used as in the camera video. The web results provide individual PNG downloads and a ZIP containing all images plus `edit_markers.json` with focus start, hold end and panel end times. CLI pipeline results include `panel_frames`; files are stored in `panel_frames/` under the render directory. Use each PNG as the first frame of a separate animation; keep its resolution and framing. Import the animation and camera video into Clipchamp, split at that panel’s hold-end marker and insert the animation before the camera movement continues. An animation that returns to its starting framing joins most cleanly.
+
+Starting-frame ZIPs also include `panel_<id>_original.png`: original-resolution panel crops without padding or resizing. These are separate from the output-sized framed PNGs. A 16:9 whole sheet in a 3x2 grid does not yield 16:9 tiles: individual tiles are approximately 32:27. For six 16:9 tiles, the sheet should be 8:3 excluding gutters (for example 5760x2160 for six 1920x1080 tiles).

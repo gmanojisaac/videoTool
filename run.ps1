@@ -29,23 +29,12 @@ if (-not $python) {
 Write-Host "Using Python: $python" -ForegroundColor DarkGray
 Write-Host "Running comic video pipeline on comic.png..." -ForegroundColor Yellow
 
-& $python -c @"
-import sys
-sys.path.insert(0, r'$scriptDir')
-from mcp_tools import create_comic_video
-res = create_comic_video(
-    image=r'$scriptDir\comic.png',
-    output=r'$scriptDir\output\comic_video.mp4',
-    preset='educational',
-    panel_duration_seconds=5.0,
-    transition_duration_seconds=2.0
-)
-print('\n[SUCCESS] Rendered to:', res['video_path'])
-"@
+& $python "$scriptDir\render_modes.py" "$scriptDir\comic.png" --mode both
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Opening video and output directory..." -ForegroundColor Green
-    Start-Process "$scriptDir\output\comic_video.mp4"
+    Start-Process "$scriptDir\output\desktop\comic_video.mp4"
+    Start-Process "$scriptDir\output\mobile\comic_video.mp4"
     Start-Process "$scriptDir\output"
 } else {
     Write-Error "Video generation failed with code $LASTEXITCODE."

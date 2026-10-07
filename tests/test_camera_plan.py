@@ -33,7 +33,8 @@ def test_default_sequence_and_shots(mock_analysis_dict, tmp_path):
         transition_duration_seconds=1.5,
         include_intro=True,
         include_outro=True,
-        output_dir=str(tmp_path),
+        backtrack_to_start=False,
+        framing="crop", output_dir=str(tmp_path),
     )
     
     assert plan["sequence"] == [1, 2, 3, 4, 5, 6]
@@ -58,7 +59,8 @@ def test_custom_sequence(mock_analysis_dict, tmp_path):
     plan = create_camera_plan(
         analysis=mock_analysis_dict,
         sequence=custom_seq,
-        output_dir=str(tmp_path),
+        backtrack_to_start=False,
+        framing="crop", output_dir=str(tmp_path),
     )
     
     panel_shots = [s for s in plan["shots"] if s["type"] == "panel"]
@@ -67,8 +69,8 @@ def test_custom_sequence(mock_analysis_dict, tmp_path):
 
 def test_presets_affect_movement(mock_analysis_dict, tmp_path):
     """Verifies that preset affects movement style and zoom factors."""
-    plan_edu = create_camera_plan(mock_analysis_dict, preset="educational", output_dir=str(tmp_path))
-    plan_wide = create_camera_plan(mock_analysis_dict, preset="wide", output_dir=str(tmp_path))
+    plan_edu = create_camera_plan(mock_analysis_dict, preset="educational", framing="crop", output_dir=str(tmp_path))
+    plan_wide = create_camera_plan(mock_analysis_dict, preset="wide", framing="crop", output_dir=str(tmp_path))
     
     edu_panel_shots = [s for s in plan_edu["shots"] if s["type"] == "panel"]
     wide_panel_shots = [s for s in plan_wide["shots"] if s["type"] == "panel"]
@@ -83,7 +85,8 @@ def test_intro_and_outro_toggles(mock_analysis_dict, tmp_path):
         mock_analysis_dict,
         include_intro=False,
         include_outro=True,
-        output_dir=str(tmp_path),
+        backtrack_to_start=False,
+        framing="crop", output_dir=str(tmp_path),
     )
     # First shot should be transition, not full_comic
     assert plan_no_intro["shots"][0]["type"] == "transition"
@@ -92,7 +95,8 @@ def test_intro_and_outro_toggles(mock_analysis_dict, tmp_path):
         mock_analysis_dict,
         include_intro=True,
         include_outro=False,
-        output_dir=str(tmp_path),
+        backtrack_to_start=False,
+        framing="crop", output_dir=str(tmp_path),
     )
     # Last shot should be a panel, not full_comic
     assert plan_no_outro["shots"][-1]["type"] == "panel"

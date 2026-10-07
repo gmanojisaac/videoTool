@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comic-video-mcp"
-version = "0.1.0"
+version = "1.0.0"
 description = "MCP server for converting 6-tile comics into cinematic educational videos using virtual 2D camera movement"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,6 +15,7 @@ dependencies = [
     "opencv-python-headless>=4.8.0",
     "pillow>=10.0.0",
     "static-ffmpeg>=2.5",
+    "imageio-ffmpeg>=0.5.0",
     "pytest>=7.0.0",
 ]
 

@@ -25,7 +25,8 @@ def test_timeline_continuity(mock_analysis, tmp_path):
         transition_duration_seconds=2.0,
         intro_duration_seconds=3.0,
         outro_duration_seconds=2.5,
-        output_dir=str(tmp_path),
+        backtrack_to_start=False,
+        framing="crop", output_dir=str(tmp_path),
     )
     
     shots = plan["shots"]
@@ -60,7 +61,8 @@ def test_duration_formula(mock_analysis, tmp_path):
         include_intro=True,
         include_outro=True,
         fps=30,
-        output_dir=str(tmp_path),
+        backtrack_to_start=False,
+        framing="crop", output_dir=str(tmp_path),
     )
     
     assert abs(plan["total_duration"] - expected_duration) < 0.01

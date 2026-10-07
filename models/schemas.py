@@ -16,6 +16,7 @@ class Panel(BaseModel):
     focus_x: int = Field(..., description="X coordinate of focal center (face, object, or center)")
     focus_y: int = Field(..., description="Y coordinate of focal center")
     focus_type: str = Field("center", description="Type of focus: 'face', 'object', or 'center'")
+    protected_content_bounds: Optional[Dict[str, float]] = Field(None, description="Protected rectangle in absolute source coordinates: x, y, width, height; defaults to whole panel")
     confidence: float = Field(1.0, description="Detection confidence score between 0.0 and 1.0")
 
 
@@ -51,9 +52,12 @@ class Shot(BaseModel):
     start: float = Field(..., description="Shot start time in seconds")
     end: float = Field(..., description="Shot end time in seconds")
     duration: float = Field(..., description="Duration in seconds")
+    hold_duration_seconds: float = Field(0.0, ge=0, description="Complete-panel hold before movement")
     movement: str = Field("hold", description="Movement style: hold, slow_push, slow_pull, pan_left, etc.")
     start_viewport: Viewport = Field(..., description="Camera viewport at shot start")
     end_viewport: Viewport = Field(..., description="Camera viewport at shot end")
+    start_content_bounds: Optional[Viewport] = None
+    end_content_bounds: Optional[Viewport] = None
     focus_x: Optional[float] = Field(None, description="Focal X coordinate")
     focus_y: Optional[float] = Field(None, description="Focal Y coordinate")
 
@@ -74,6 +78,12 @@ class CameraPlan(BaseModel):
     format: str = Field("desktop", description="Detected or specified format: 'desktop' or 'mobile'")
     layout: str = Field("3x2", description="Grid layout: '3x2' or '2x3'")
     show_full_comic_between_panels: bool = Field(False, description="Whether to zoom out to full comic during tile transitions (False for continuous canvas)")
+    framing: Literal["contain", "crop"] = "crop"
+    panel_bounds: Dict[str, Viewport] = Field(default_factory=dict)
+    protected_content_bounds: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    panel_hold_seconds: float = Field(1.0, ge=0)
+    push_in_zoom: float = Field(1.05, ge=1, le=1.2)
+    backtrack_to_start: bool = Field(False, description="Reverse panel movement and approach before the next panel")
     total_duration: float = Field(..., description="Total video duration in seconds")
     total_frames: int = Field(..., description="Total number of frames")
     shots: List[Shot] = Field(default_factory=list, description="Ordered list of camera shots")

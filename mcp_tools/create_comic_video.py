@@ -19,6 +19,8 @@ from config import (
 from mcp_tools.analyze_comic import analyze_comic
 from mcp_tools.create_camera_plan import create_camera_plan
 from mcp_tools.render_video import render_video
+from models.schemas import CameraPlan
+from video.renderer import export_panel_start_frames
 
 
 def create_comic_video(
@@ -32,6 +34,7 @@ def create_comic_video(
     include_intro: bool = True,
     include_outro: bool = True,
     show_full_comic_between_panels: bool = False,
+    backtrack_to_start: bool = True,
     manual_panels: Optional[List[Dict[str, Any]]] = None,
     sequence: Optional[List[int]] = None,
     width: Optional[int] = None,
@@ -41,6 +44,10 @@ def create_comic_video(
     output_dir: Optional[str] = None,
     format: Optional[str] = None,
     layout: Optional[str] = None,
+    framing: str = "contain",
+    panel_hold_seconds: float = 1.0,
+    push_in_zoom: Optional[float] = None,
+    protected_content_bounds: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> Dict[str, Any]:
     """End-to-end continuous canvas pipeline: analyzes comic sheet (desktop 4:3 3x2 or mobile 9:16 2x3),
     generates seamless camera plan, and renders final MP4 using FFmpeg.
@@ -57,14 +64,20 @@ def create_comic_video(
         include_outro: Whether to include full comic overview outro.
         show_full_comic_between_panels: False for continuous canvas travel; True for tile overview.
         manual_panels: Optional manual panel coordinate overrides.
+        backtrack_to_start: Reverse each panel approach before visiting the next panel.
         sequence: Custom reading order (default [1, 2, 3, 4, 5, 6]).
         width: Video width (default: auto-detected 1920 for desktop, 1080 for mobile).
         height: Video height (default: auto-detected 1080 for desktop, 1920 for mobile).
         fps: Video framerate (default 30).
         audio: False or path to audio voiceover file.
         output_dir: Output directory for all generated artifacts.
-        format: Optional format override ('desktop' or 'mobile').
+        format: Output mode ('desktop' or 'mobile'); source layout is detected independently.
         layout: Optional layout override ('3x2' or '2x3').
+        framing: 'contain' preserves panel aspect and edges; 'crop' is the legacy mode.
+        panel_hold_seconds: Initial complete-panel hold within panel_duration_seconds.
+        push_in_zoom: Maximum zoom factor (1–1.2); reduced to protect content.
+        protected_content_bounds: Panel-ID mapping of source-pixel x/y/width/height rectangles.
+            Unspecified panels protect their entire area and remain still.
         
     Returns:
         Summary dictionary with all artifact paths, metadata, format, layout, and status.
@@ -94,6 +107,11 @@ def create_comic_video(
         include_intro=include_intro,
         include_outro=include_outro,
         show_full_comic_between_panels=show_full_comic_between_panels,
+        backtrack_to_start=backtrack_to_start,
+        framing=framing,
+        panel_hold_seconds=panel_hold_seconds,
+        push_in_zoom=push_in_zoom,
+        protected_content_bounds=protected_content_bounds,
         sequence=sequence,
         width=width,
         height=height,
@@ -114,7 +132,10 @@ def create_comic_video(
         audio=audio,
     )
     
+    frame_exports = export_panel_start_frames(CameraPlan(**plan_res), out_dir / "panel_frames",
+        width=render_res["width"], height=render_res["height"])
     return {
+        "panel_frames": frame_exports,
         "status": "success",
         "video_path": render_res["video_path"],
         "analysis_file": analysis_res.get("analysis_file"),

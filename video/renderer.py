@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import cv2
+import json
+from zipfile import ZipFile, ZIP_DEFLATED
 import hashlib
 import numpy as np
 import subprocess
@@ -36,7 +38,7 @@ def get_viewport_at_time(
     # Locate active shot
     active_shot: Optional[Shot] = None
     for shot in plan.shots:
-        if shot.start <= t <= shot.end:
+        if shot.start <= t < shot.end:
             active_shot = shot
             break
             
@@ -51,13 +53,18 @@ def get_viewport_at_time(
     progress = (t - active_shot.start) / duration
     progress = max(0.0, min(1.0, progress))
 
+    if active_shot.type == "panel":
+        moving_duration = active_shot.duration - active_shot.hold_duration_seconds
+        progress = 0.0 if moving_duration <= 0 else max(0.0, min(1.0,
+            (t-active_shot.start-active_shot.hold_duration_seconds)/moving_duration))
+
     if active_shot.type == "transition":
         return sample_transition_viewport(
             from_viewport=active_shot.start_viewport,
             to_viewport=active_shot.end_viewport,
             full_comic_viewport=full_comic_viewport,
             progress=progress,
-            show_full_comic=show_full_comic_transitions,
+            show_full_comic=show_full_comic_transitions and not plan.backtrack_to_start,
         )
     else:
         return interpolate_viewports(
@@ -68,11 +75,24 @@ def get_viewport_at_time(
         )
 
 
+def isolate_panel_content(image: np.ndarray, bounds: Viewport) -> np.ndarray:
+    """Mask before resampling so adjacent panels cannot bleed through Lanczos edges."""
+    height, width = image.shape[:2]
+    left, right = max(0, int(np.floor(bounds.x))), min(width, int(np.ceil(bounds.x+bounds.width)))
+    top, bottom = max(0, int(np.floor(bounds.y))), min(height, int(np.ceil(bounds.y+bounds.height)))
+    isolated = np.full_like(image, 24)
+    isolated[top:bottom, left:right] = image[top:bottom, left:right]
+    return isolated
+
+
 def extract_frame_for_viewport(
     image: np.ndarray,
     viewport: Viewport,
     out_width: int,
     out_height: int,
+    content_bounds: Optional[Viewport] = None,
+    contain: bool = False,
+    source_isolated: bool = False,
 ) -> np.ndarray:
     """Crops the virtual camera viewport with subpixel precision and scales to output resolution
     using Lanczos-4 interpolation, eliminating border artifacts and jitter.
@@ -83,12 +103,15 @@ def extract_frame_for_viewport(
     vw = float(viewport.width)
     vh = float(viewport.height)
 
-    # Clamp viewport to canvas boundaries
-    vw = max(1.0, min(float(img_w), vw))
-    vh = max(1.0, min(float(img_h), vh))
-    vx = max(0.0, min(float(img_w - vw), vx))
-    vy = max(0.0, min(float(img_h - vh), vy))
+    # Whole-tile framing permits padded viewports beyond canvas edges.
+    if not contain:
+        vw = max(1.0, min(float(img_w), vw))
+        vh = max(1.0, min(float(img_h), vh))
+        vx = max(0.0, min(float(img_w - vw), vx))
+        vy = max(0.0, min(float(img_h - vh), vy))
 
+    if contain and content_bounds is not None and not source_isolated:
+        image = isolate_panel_content(image, content_bounds)
     src_pts = np.array([
         [vx, vy],
         [vx + vw, vy],
@@ -107,8 +130,21 @@ def extract_frame_for_viewport(
         M,
         (out_width, out_height),
         flags=cv2.INTER_LANCZOS4,
-        borderMode=cv2.BORDER_REPLICATE,
+        borderMode=(cv2.BORDER_CONSTANT if contain and
+            (vx < 0 or vy < 0 or vx + vw > img_w or vy + vh > img_h)
+            else cv2.BORDER_REPLICATE),
+        borderValue=(24, 24, 24),
     )
+    if contain and content_bounds is not None:
+        # Hide adjacent tiles in the padding without cropping the focused tile.
+        left = max(0, min(out_width, int(np.floor((content_bounds.x-vx)*out_width/vw))))
+        right = max(0, min(out_width, int(np.ceil((content_bounds.x+content_bounds.width-vx)*out_width/vw))))
+        top = max(0, min(out_height, int(np.floor((content_bounds.y-vy)*out_height/vh))))
+        bottom = max(0, min(out_height, int(np.ceil((content_bounds.y+content_bounds.height-vy)*out_height/vh))))
+        frame[:, :left] = 24
+        frame[:, right:] = 24
+        frame[:top, :] = 24
+        frame[bottom:, :] = 24
     return frame
 
 
@@ -157,6 +193,8 @@ def render_camera_plan_video(
     ffmpeg_cmd = [
         ffmpeg_bin,
         "-y",
+        "-loglevel", "error",
+        "-nostats",
         "-f", "rawvideo",
         "-pix_fmt", "bgr24",
         "-s", f"{out_w}x{out_h}",
@@ -178,6 +216,8 @@ def render_camera_plan_video(
     
     show_full_comic = getattr(plan, "show_full_comic_between_panels", False)
 
+    cached_bounds = None
+    cached_image = source_image
     try:
         for frame_idx in range(total_frames):
             t = frame_idx / float(fps)
@@ -187,7 +227,21 @@ def render_camera_plan_video(
                 full_comic_viewport=full_comic_viewport,
                 show_full_comic_transitions=show_full_comic,
             )
-            frame = extract_frame_for_viewport(source_image, vp, out_w, out_h)
+            content_bounds = None
+            if plan.framing == "contain":
+                for shot in plan.shots:
+                    if shot.start <= t < shot.end:
+                        if shot.start_content_bounds is not None and shot.end_content_bounds is not None:
+                            content_bounds = interpolate_viewports(shot.start_content_bounds,
+                                shot.end_content_bounds, (t-shot.start)/max(shot.duration, 0.0001))
+                        break
+            if content_bounds is not None and content_bounds != cached_bounds:
+                cached_image = isolate_panel_content(source_image, content_bounds)
+                cached_bounds = content_bounds
+            frame_source = cached_image if content_bounds is not None else source_image
+            frame = extract_frame_for_viewport(frame_source, vp, out_w, out_h,
+                content_bounds=content_bounds, contain=plan.framing == "contain",
+                source_isolated=content_bounds is not None)
             proc.stdin.write(frame.tobytes())
             
             if progress_callback and frame_idx % 30 == 0:
@@ -266,3 +320,55 @@ def generate_camera_plan_preview_image(
     out_p.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out_p), canvas)
     return out_p
+
+
+def export_panel_start_frames(plan: CameraPlan, output_dir: str | Path,
+    width: Optional[int] = None, height: Optional[int] = None) -> Dict[str, Any]:
+    """Export exact complete-panel arrival images and edit markers for animation inserts."""
+    source = cv2.imread(str(plan.image_path))
+    if source is None:
+        raise ValueError(f"Failed to read image: {plan.image_path}")
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    out_width = width or plan.resolution.width
+    out_height = height or plan.resolution.height
+    out_width += out_width % 2
+    out_height += out_height % 2
+    frames = []
+    seen = set()
+    for shot in plan.shots:
+        if shot.type != "panel" or shot.panel_id in seen:
+            continue
+        seen.add(shot.panel_id)
+        # Use the same viewport, masking, and resampling as the focused video shot.
+        frame = extract_frame_for_viewport(source, shot.start_viewport, out_width, out_height,
+            content_bounds=shot.start_content_bounds, contain=plan.framing == "contain")
+        path = directory / f"panel_{shot.panel_id}_start.png"
+        if not cv2.imwrite(str(path), frame):
+            raise RuntimeError(f"Could not save {path}")
+        bounds = plan.panel_bounds.get(str(shot.panel_id)) or shot.start_content_bounds
+        if bounds is None:
+            raise ValueError("Original tile crops require contain framing with panel boundaries")
+        left, top = max(0,int(round(bounds.x))), max(0,int(round(bounds.y)))
+        right = min(source.shape[1],int(round(bounds.x+bounds.width)))
+        bottom = min(source.shape[0],int(round(bounds.y+bounds.height)))
+        raw_path = directory / f"panel_{shot.panel_id}_original.png"
+        if not cv2.imwrite(str(raw_path),source[top:bottom,left:right]):
+            raise RuntimeError(f"Could not save {raw_path}")
+        frames.append({"panel_id":shot.panel_id,"image_path":str(path.resolve()),
+            "original_image_path":str(raw_path.resolve()),
+            "original_width":right-left,"original_height":bottom-top,
+            "width":out_width,"height":out_height,"focus_start_seconds":shot.start,
+            "hold_end_seconds":round(shot.start+shot.hold_duration_seconds,3),
+            "panel_end_seconds":shot.end})
+    manifest = directory / "edit_markers.json"
+    manifest.write_text(json.dumps({"mode":plan.format,"fps":plan.fps,"frames":frames},indent=2),encoding="utf-8")
+    archive = directory / "panel_start_frames.zip"
+    with ZipFile(archive,"w",ZIP_DEFLATED) as bundle:
+        for item in frames:
+            path = Path(item["image_path"])
+            bundle.write(path,path.name)
+            original = Path(item["original_image_path"])
+            bundle.write(original,original.name)
+        bundle.write(manifest,manifest.name)
+    return {"frames":frames,"manifest_path":str(manifest.resolve()),"archive_path":str(archive.resolve())}
